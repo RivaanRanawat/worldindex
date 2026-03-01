@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "worldindex"
+version = "0.1.0"
+description = "WorldIndex"
+authors = ["Rivaan Ranawat"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.2.0"
+pillow = "^11.1.0"
+pydantic = "^2.10.0"
+pyyaml = "^6.0.2"
+structlog = "^25.1.0"
+
+[tool.poetry.group.video]
+optional = true
+
+[tool.poetry.group.video.dependencies]
+lerobot = "*"
+torch = "*"
+torchcodec = "*"
+transformers = "^4.57.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: requires live LeRobot streaming access and the optional video dependency group",
+]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

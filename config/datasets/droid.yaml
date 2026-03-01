@@ -1,0 +1,8 @@
+repo_id: "lerobot/droid_1.0.1"
+image_key: "observation.images.exterior_1_left"
+source_fps: 15
+target_fps: 4
+robot_type: "franka"
+language_key: "language_instruction"
+clip_length: 64
+clip_stride: 32

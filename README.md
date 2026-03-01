@@ -1,6 +1,6 @@
 # WorldIndex
 
-Token level spatiotemporal retrieval using VJEPA v2
+ColBERT-style late interaction Token level spatiotemporal retrieval using VJEPA v2. 
 
 ## What it is & Why this is useful
 

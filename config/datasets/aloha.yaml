@@ -1,0 +1,7 @@
+repo_id: "lerobot/aloha_sim_insertion_scripted_image"
+image_key: "observation.images.top"
+source_fps: 50
+target_fps: 4
+robot_type: "aloha"
+clip_length: 64
+clip_stride: 32
