@@ -31,6 +31,10 @@ Note: I say "theoretically" here because I dont know if I will implement the fro
 * Unit: `poetry run pytest tests/ingestion -v`
 * Unit + End to End (Included): `WORLDINDEX_RUN_REAL_INGESTION=1 WORLDINDEX_REAL_INGESTION_DATASET=aloha poetry run pytest tests/ingestion -v`
 
+### Extraction
+* Unit: `poetry run pytest tests/extraction -v`
+* Unit + End to End (Included): `WORLDINDEX_RUN_REAL_EXTRACTION=1 poetry run pytest tests/extraction -v`
+
 ## Explanations
 
 Explanation about how each component works can be found within `docs/`.

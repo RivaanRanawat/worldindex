@@ -47,12 +47,6 @@ class ClipFormer:
         )
         self._episode_ranges = self._build_episode_ranges()
 
-        if self._episode_ranges is not None:
-            self._num_episodes: int | None = len(self._episode_ranges)
-        else:
-            raw = getattr(self._dataset, "num_episodes", None)
-            self._num_episodes = None if raw is None else int(raw)
-
     def iter_clips(self) -> Iterator[tuple[dict[str, Any], ClipMetadata]]:
         if self._episode_ranges is not None:
             for episode_index in range(len(self._episode_ranges)):
@@ -72,34 +66,6 @@ class ClipFormer:
                 frame_numbers=frame_numbers,
                 language_instruction=language_instruction,
             )
-
-    # need it for distributed version
-    # def iter_clips_for_episode(self, episode_id: str) -> Iterator[tuple[dict[str, Any], ClipMetadata]]:
-    #     episode_index = self._parse_episode_id(episode_id)
-    #     if self._episode_ranges is not None:
-    #         episode_frames, frame_numbers, language_instruction = self._load_episode(episode_index)
-    #         yield from self._emit_episode_clips(
-    #             episode_index=episode_index,
-    #             episode_frames=episode_frames,
-    #             frame_numbers=frame_numbers,
-    #             language_instruction=language_instruction,
-    #         )
-    #         return
-
-    #     for streamed_episode_index, episode_frames, frame_numbers, language_instruction in self._iter_streamed_episodes(
-    #         target_episode_index=episode_index
-    #     ):
-    #         if streamed_episode_index != episode_index:
-    #             continue
-    #         yield from self._emit_episode_clips(
-    #             episode_index=streamed_episode_index,
-    #             episode_frames=episode_frames,
-    #             frame_numbers=frame_numbers,
-    #             language_instruction=language_instruction,
-    #         )
-    #         return
-
-    #     raise ValueError(f"{episode_id} is outside the available episode range")
 
     def _build_episode_ranges(self) -> list[tuple[int, int]] | None:
         episode_data_index = getattr(self._dataset, "episode_data_index", None)
@@ -174,10 +140,7 @@ class ClipFormer:
 
         return frames, frame_numbers, language_instruction
 
-    def _iter_streamed_episodes(
-        self,
-        target_episode_index: int | None = None,
-    ) -> Iterator[tuple[int, list[Any], list[int], str | None]]:
+    def _iter_streamed_episodes(self) -> Iterator[tuple[int, list[Any], list[int], str | None]]:
         current_episode_index: int | None = None
         frames: list[Any] = []
         frame_numbers: list[int] = []
@@ -185,19 +148,11 @@ class ClipFormer:
 
         for sample in self._iter_stream_samples():
             sample_episode_index = int(sample["episode_index"])
-            if target_episode_index is not None and sample_episode_index < target_episode_index:
-                continue
 
             if current_episode_index is None:
-                if target_episode_index is not None and sample_episode_index > target_episode_index:
-                    return
                 current_episode_index = sample_episode_index
             elif sample_episode_index != current_episode_index:
                 yield current_episode_index, frames, frame_numbers, language_instruction
-                if target_episode_index is not None and current_episode_index >= target_episode_index:
-                    return
-                if target_episode_index is not None and sample_episode_index > target_episode_index:
-                    return
                 current_episode_index = sample_episode_index
                 frames = []
                 frame_numbers = []
@@ -310,21 +265,6 @@ class ClipFormer:
         if len(pixel_values.shape) == 5 and pixel_values.shape[0] == 1:
             processed["pixel_values"] = pixel_values.squeeze(0)
         return processed
-
-    # need it for distributed version
-    # def _parse_episode_id(self, episode_id: str) -> int:
-    #     prefix = f"{self.config.repo_id}_"
-    #     if not episode_id.startswith(prefix):
-    #         raise ValueError(f"{episode_id} does not belong to {self.config.repo_id}")
-
-    #     suffix = episode_id[len(prefix):]
-    #     if not suffix.isdigit():
-    #         raise ValueError(f"{episode_id} is not a valid episode identifier")
-
-    #     episode_index = int(suffix)
-    #     if self._num_episodes is not None and episode_index >= self._num_episodes:
-    #         raise ValueError(f"{episode_id} is outside the available episode range")
-    #     return episode_index
 
     @staticmethod
     def _get_nested_value(sample: Mapping[str, Any], key_path: str) -> Any:

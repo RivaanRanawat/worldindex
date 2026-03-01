@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from ingestion import ClipFormer, DatasetConfig, load_all_configs
@@ -218,70 +217,6 @@ def test_iter_clips_emits_overlapping_windows_for_long_episode() -> None:
         "lerobot/droid_0",
         "lerobot/droid_0",
     ]
-
-
-# Enable when distributed added
-
-# def test_iter_clips_for_episode_returns_only_requested_episode() -> None:
-#     config = _build_config()
-#     dataset = FakeStreamingDataset(
-#         [100, 400],
-#         image_key=config.image_key,
-#         language_key=config.language_key,
-#         language_values={0: "first task", 1: "second task"},
-#     )
-#     processor = RecordingVideoProcessor()
-#     clip_former = ClipFormer(config, dataset=dataset, video_processor=processor)
-
-#     clips = list(clip_former.iter_clips_for_episode("lerobot/droid_1"))
-
-#     assert len(clips) == 3
-#     assert all(metadata.episode_id == "lerobot/droid_1" for _, metadata in clips)
-#     assert all(metadata.language_instruction == "second task" for _, metadata in clips)
-
-
-# def test_iter_clips_for_episode_supports_iterable_streaming_dataset() -> None:
-#     config = _build_config()
-#     dataset = FakeIterableStreamingDataset(
-#         [100, 100],
-#         image_key=config.image_key,
-#         language_key=config.language_key,
-#         language_values={0: "first task", 1: "second task"},
-#     )
-#     processor = RecordingVideoProcessor()
-#     clip_former = ClipFormer(config, dataset=dataset, video_processor=processor)
-
-#     clips = list(clip_former.iter_clips_for_episode("lerobot/droid_1"))
-
-#     assert len(clips) == 1
-#     processed, metadata = clips[0]
-#     assert processed["pixel_values"].shape == (64, 3, 256, 256)
-#     assert metadata.episode_id == "lerobot/droid_1"
-#     assert metadata.language_instruction == "second task"
-#     assert metadata.num_original_frames == 27
-
-
-# def test_iter_clips_for_episode_rejects_missing_episode_for_unknown_stream_length() -> None:
-#     config = _build_config(language_key=None)
-#     dataset = FakeIterableStreamingDatasetWithoutEpisodeCount(
-#         [100, 100],
-#         image_key=config.image_key,
-#     )
-#     processor = RecordingVideoProcessor()
-#     clip_former = ClipFormer(config, dataset=dataset, video_processor=processor)
-
-#     with pytest.raises(ValueError):
-#         list(clip_former.iter_clips_for_episode("lerobot/droid_5"))
-
-
-# def test_iter_clips_for_episode_rejects_invalid_identifier() -> None:
-#     config = _build_config(language_key=None)
-#     dataset = FakeStreamingDataset([100], image_key=config.image_key)
-#     processor = RecordingVideoProcessor()
-#     clip_former = ClipFormer(config, dataset=dataset, video_processor=processor)
-
-#     with pytest.raises(ValueError):
-#         list(clip_former.iter_clips_for_episode("lerobot/bridge_0"))
 
 
 def test_padding_repeats_final_subsampled_frame_for_tiny_episode() -> None:
