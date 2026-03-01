@@ -1,5 +1,7 @@
 import os
+from pathlib import Path
 import pytest
+
 from ingestion import ClipFormer, DatasetConfig
 
 if os.environ.get("WORLDINDEX_RUN_REAL_INGESTION") != "1":
@@ -9,15 +11,19 @@ if os.environ.get("WORLDINDEX_RUN_REAL_INGESTION") != "1":
     )
 
 
+def _load_integration_config() -> DatasetConfig:
+    dataset_name = os.environ.get("WORLDINDEX_REAL_INGESTION_DATASET", "droid")
+    config_path = Path("config/datasets") / f"{dataset_name}.yaml"
+    if not config_path.is_file():
+        raise ValueError(
+            f"Unsupported integration dataset {dataset_name!r}; expected a config in {config_path.parent}"
+        )
+    return DatasetConfig.from_yaml(config_path)
+
+
 @pytest.mark.integration
-def test_real_droid_streaming_clip_shapes() -> None:
-    config = DatasetConfig(
-        repo_id="lerobot/droid_1.0.1",
-        image_key="observation.images.exterior_1_left",
-        source_fps=15,
-        robot_type="franka",
-        language_key="language_instruction",
-    )
+def test_real_streaming_clip_shapes() -> None:
+    config = _load_integration_config()
     clip_former = ClipFormer(config)
 
     unique_episodes = 0

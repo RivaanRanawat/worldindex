@@ -20,6 +20,17 @@ It can be thought of as a better Google Image Search. It does not just find "vis
 
 Note: I say "theoretically" here because I dont know if I will implement the frontend part. Maybe I'll vibe code the UI. I do plan to include the API endpoints, for sure!
 
+
+## Tests
+
+### All tests
+* Unit: `poetry run pytest tests/ -v`
+* Unit + End to End (Included): `WORLDINDEX_RUN_REAL_INGESTION=1 WORLDINDEX_REAL_INGESTION_DATASET=aloha poetry run pytest tests/ -v`
+
+### Ingestion
+* Unit: `poetry run pytest tests/ingestion -v`
+* Unit + End to End (Included): `WORLDINDEX_RUN_REAL_INGESTION=1 WORLDINDEX_REAL_INGESTION_DATASET=aloha poetry run pytest tests/ingestion -v`
+
 ## Explanations
 
 Explanation about how each component works can be found within `docs/`.
