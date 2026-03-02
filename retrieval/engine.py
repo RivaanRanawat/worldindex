@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import faiss
 import numpy as np
@@ -11,9 +11,18 @@ from PIL import Image
 from compression import TokenCompressor
 from retrieval.dtw import DTWMatcher
 from retrieval.maxsim import MaxSimScorer
-from retrieval.models import BoundingBox, RetrievalConfig, SearchResult, TrajectoryResult
-from retrieval.query_encoder import QueryEncoder
+from retrieval.models import (
+    BoundingBox,
+    EpisodeDetails,
+    RetrievalConfig,
+    SearchResult,
+    TrajectoryResult,
+    TransitionResult,
+)
 from retrieval.shard_reader import CompressedShardReader
+
+if TYPE_CHECKING:
+    from retrieval.query_encoder import QueryEncoder
 
 
 class RetrievalEngine:
@@ -34,7 +43,12 @@ class RetrievalEngine:
         self._episode_lookup = self._build_episode_lookup(self._metadata_rows)
         self._compressor = TokenCompressor.load(self.config.compressor_dir)
         self._shard_reader = CompressedShardReader(self.config.shard_dir)
-        self._query_encoder = query_encoder if query_encoder is not None else QueryEncoder(self.config.query_encoder)
+        if query_encoder is not None:
+            self._query_encoder = query_encoder
+        else:
+            from retrieval.query_encoder import QueryEncoder
+
+            self._query_encoder = QueryEncoder(self.config.query_encoder)
         self._maxsim_scorer = (
             maxsim_scorer
             if maxsim_scorer is not None
@@ -46,6 +60,18 @@ class RetrievalEngine:
         self._dtw_matcher = dtw_matcher if dtw_matcher is not None else DTWMatcher()
         self._trajectory_index: faiss.Index | None = None
         self._trajectory_frame_episode_ids: list[str] = []
+
+    @property
+    def indexed_clip_count(self) -> int:
+        return int(self._metadata.height)
+
+    @property
+    def model_id(self) -> str:
+        return self.config.query_encoder.model_id
+
+    @property
+    def device(self) -> str:
+        return self.config.query_encoder.device
 
     def search_image(
         self,
@@ -125,7 +151,7 @@ class RetrievalEngine:
         image_b: Image.Image,
         top_k: int = 10,
         max_gap_sec: float = 30.0,
-    ) -> list[SearchResult]:
+    ) -> list[TransitionResult]:
         ranked_a = self._scored_image_candidates(image_a, self.config.coarse_search_k)
         ranked_b = self._scored_image_candidates(image_b, self.config.coarse_search_k)
 
@@ -152,9 +178,36 @@ class RetrievalEngine:
 
         episode_rankings.sort(key=lambda item: item[0], reverse=True)
         return [
-            self._build_search_result(clip_id=clip_id, row=row, score=score)
+            self._build_search_result(
+                clip_id=clip_id,
+                row=row,
+                score=score,
+                result_type=TransitionResult,
+            )
             for score, clip_id, row in episode_rankings[:top_k]
         ]
+
+    def get_episode_details(self, episode_id: str) -> EpisodeDetails:
+        matching_rows = self._metadata.filter(pl.col("episode_id") == episode_id)
+        if matching_rows.height == 0:
+            raise KeyError(f"Unknown episode_id: {episode_id}")
+
+        first_row = matching_rows.row(0, named=True)
+        instructions = [
+            str(value)
+            for value in matching_rows.get_column("language_instruction").to_list()
+            if value is not None
+        ] if "language_instruction" in matching_rows.columns else []
+
+        return EpisodeDetails(
+            episode_id=episode_id,
+            dataset_name=str(first_row["dataset_name"]),
+            robot_type=str(first_row["robot_type"]),
+            clip_count=matching_rows.height,
+            timestamp_start=float(matching_rows.get_column("timestamp_start").min()),
+            timestamp_end=float(matching_rows.get_column("timestamp_end").max()),
+            language_instruction=instructions[0] if instructions else None,
+        )
 
     def _search_by_tokens(
         self,
@@ -266,8 +319,9 @@ class RetrievalEngine:
         clip_id: int,
         row: dict[str, Any],
         score: float,
+        result_type: type[SearchResult] = SearchResult,
     ) -> SearchResult:
-        return SearchResult(
+        return result_type(
             clip_id=clip_id,
             episode_id=str(row["episode_id"]),
             dataset_name=str(row["dataset_name"]),

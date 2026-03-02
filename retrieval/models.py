@@ -46,6 +46,10 @@ class SearchResult(BaseModel):
     language_instruction: str | None = None
 
 
+class TransitionResult(SearchResult):
+    model_config = ConfigDict(frozen=True)
+
+
 class TrajectoryResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -54,6 +58,18 @@ class TrajectoryResult(BaseModel):
     robot_type: str
     dtw_distance: float
     alignment_path: list[tuple[int, int]]
+
+
+class EpisodeDetails(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    episode_id: str
+    dataset_name: str
+    robot_type: str
+    clip_count: int = Field(ge=0)
+    timestamp_start: float
+    timestamp_end: float
+    language_instruction: str | None = None
 
 
 class QueryEncoderConfig(BaseModel):

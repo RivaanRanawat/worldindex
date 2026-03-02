@@ -17,6 +17,9 @@ pyarrow = "^19.0.1"
 pyyaml = "^6.0.2"
 scikit-learn = "^1.8.0"
 structlog = "^25.1.0"
+fastapi = "^0.135.1"
+uvicorn = "^0.41.0"
+python-multipart = "^0.0.22"
 
 [tool.poetry.group.video]
 optional = true
@@ -29,6 +32,7 @@ transformers = "^4.57.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
+httpx = "^0.28.1"
 
 [tool.pytest.ini_options]
 markers = [
