@@ -1,4 +1,5 @@
 from retrieval.dtw import DTWMatcher
+from retrieval.engine import RetrievalEngine
 from retrieval.maxsim import MaxSimScorer
 from retrieval.models import BoundingBox, QueryEncoderConfig, RetrievalConfig, SearchResult, TrajectoryResult
 from retrieval.query_encoder import QueryEncoder
@@ -12,6 +13,7 @@ __all__ = [
     "QueryEncoder",
     "QueryEncoderConfig",
     "RetrievalConfig",
+    "RetrievalEngine",
     "SearchResult",
     "TrajectoryResult",
 ]
