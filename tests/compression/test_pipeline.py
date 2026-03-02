@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +44,10 @@ def _write_raw_batch(raw_dir: Path, start_clip_index: int, tokens: np.ndarray) -
     metadata.write_parquet(metadata_path)
 
 
-def test_run_compression_pipeline_writes_shards_and_consolidated_metadata(tmp_path: Path) -> None:
+def test_run_compression_pipeline_reuses_existing_outputs_on_rerun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     _write_raw_batch(raw_dir, 0, _make_raw_tokens(seed=0, clip_count=2, tokens_per_clip=12, input_dim=32))
@@ -52,6 +56,7 @@ def test_run_compression_pipeline_writes_shards_and_consolidated_metadata(tmp_pa
     config = CompressionPipelineConfig(
         raw_dir=raw_dir,
         output_dir=tmp_path / "compressed",
+        checkpoint_db=tmp_path / "state" / "compression.sqlite3",
         sample_size=24,
         pca_dim=8,
         n_centroids=4,
@@ -63,16 +68,38 @@ def test_run_compression_pipeline_writes_shards_and_consolidated_metadata(tmp_pa
 
     assert metadata_path == config.consolidated_metadata_path
     assert config.compressor_dir.exists()
+    assert config.checkpoint_db.exists()
 
     shard_paths = sorted(config.shard_dir.glob("*.widx"))
     assert [path.name for path in shard_paths] == ["shard_00000000.widx", "shard_00000001.widx"]
+
+    with sqlite3.connect(config.checkpoint_db) as connection:
+        checkpoint_rows = dict(
+            connection.execute(
+                """
+                SELECT checkpoint_key, checkpoint_value
+                FROM compression_checkpoint
+                """
+            ).fetchall()
+        )
+    assert checkpoint_rows == {
+        "compression:training_complete": "1",
+        "compression:last_completed_shard_id": "1",
+    }
 
     recovered_clip = read_clip_from_shard(shard_paths[1], 0)
     assert recovered_clip.centroid_ids.shape == (12,)
     assert recovered_clip.quantized_residuals.shape == (12, 2)
     assert recovered_clip.coarse_vector.shape == (8,)
 
+    def fail_if_called(*args: object, **kwargs: object) -> None:
+        raise AssertionError("completed shards should not be rewritten on rerun")
+
+    monkeypatch.setattr("compression.pipeline.write_compressed_shard", fail_if_called)
+    second_metadata_path = run_compression_pipeline(config)
+
     consolidated = pl.read_parquet(config.consolidated_metadata_path)
+    assert second_metadata_path == config.consolidated_metadata_path
     assert consolidated["clip_index"].to_list() == [0, 1, 2]
     assert consolidated["shard_id"].to_list() == [0, 0, 1]
     assert consolidated["shard_offset"].to_list() == [0, 1, 0]

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -12,12 +14,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from compression.shards import write_compressed_shard
 from compression.token_compressor import TokenCompressor
 
+_CHECKPOINT_ROW_KEY_PREFIX = "compression:"
+_TRAINING_COMPLETE_KEY = "training_complete"
+_LAST_COMPLETED_SHARD_KEY = "last_completed_shard_id"
+
 
 class CompressionPipelineConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     raw_dir: Path
     output_dir: Path
+    checkpoint_db: Path
     sample_size: int = Field(default=500_000, gt=0)
     pca_dim: int = Field(default=128, gt=0)
     n_centroids: int = Field(default=32768, gt=0, le=np.iinfo(np.uint16).max)
@@ -127,12 +134,13 @@ def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     config.shard_dir.mkdir(parents=True, exist_ok=True)
     config.shard_metadata_dir.mkdir(parents=True, exist_ok=True)
+    _initialize_checkpoint_db(config.checkpoint_db)
 
     raw_batches = discover_raw_batches(config.raw_dir)
     if not raw_batches:
         raise FileNotFoundError(f"No extraction token batches found in {config.raw_dir}")
 
-    if config.compressor_dir.exists():
+    if _read_checkpoint(config.checkpoint_db, _TRAINING_COMPLETE_KEY, "0") == "1":
         compressor = TokenCompressor.load(config.compressor_dir)
         logger.info("loaded_existing_compressor", compressor_dir=str(config.compressor_dir))
     else:
@@ -144,11 +152,15 @@ def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
         )
         compressor.train(sampled_tokens)
         compressor.save(config.compressor_dir)
+        _write_checkpoint(config.checkpoint_db, _TRAINING_COMPLETE_KEY, "1")
         logger.info("trained_compressor", compressor_dir=str(config.compressor_dir))
 
+    last_completed_shard_id = int(_read_checkpoint(config.checkpoint_db, _LAST_COMPLETED_SHARD_KEY, "-1"))
     for shard_id, raw_batch in enumerate(raw_batches):
         shard_path = config.shard_dir / f"shard_{shard_id:08d}.widx"
         shard_metadata_path = config.shard_metadata_dir / f"shard_{shard_id:08d}.parquet"
+        if shard_id <= last_completed_shard_id and shard_path.exists() and shard_metadata_path.exists():
+            continue
 
         token_batch = np.load(raw_batch.token_path, mmap_mode="r")
         metadata_frame = pl.read_parquet(raw_batch.metadata_path)
@@ -169,6 +181,7 @@ def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
             shard_offsets,
         )
         _write_parquet_atomically(enriched_metadata, shard_metadata_path)
+        _write_checkpoint(config.checkpoint_db, _LAST_COMPLETED_SHARD_KEY, str(shard_id))
         logger.info(
             "compressed_shard_written",
             shard_id=shard_id,
@@ -212,3 +225,52 @@ def _write_parquet_atomically(frame: pl.DataFrame, output_path: Path) -> None:
     temp_output_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
     frame.write_parquet(temp_output_path)
     temp_output_path.replace(output_path)
+
+
+def _initialize_checkpoint_db(checkpoint_db_path: Path) -> None:
+    checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(checkpoint_db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS compression_checkpoint (
+                checkpoint_key TEXT PRIMARY KEY,
+                checkpoint_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+
+
+def _read_checkpoint(checkpoint_db_path: Path, key: str, default: str) -> str:
+    with sqlite3.connect(checkpoint_db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT checkpoint_value
+            FROM compression_checkpoint
+            WHERE checkpoint_key = ?
+            """,
+            (_checkpoint_row_key(key),),
+        ).fetchone()
+    if row is None:
+        return default
+    return str(row[0])
+
+
+def _write_checkpoint(checkpoint_db_path: Path, key: str, value: Any) -> None:
+    with sqlite3.connect(checkpoint_db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO compression_checkpoint (checkpoint_key, checkpoint_value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(checkpoint_key) DO UPDATE SET
+                checkpoint_value = excluded.checkpoint_value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (_checkpoint_row_key(key), str(value)),
+        )
+        connection.commit()
+
+
+def _checkpoint_row_key(key: str) -> str:
+    return f"{_CHECKPOINT_ROW_KEY_PREFIX}{key}"
