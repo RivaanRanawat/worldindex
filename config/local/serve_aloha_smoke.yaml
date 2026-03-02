@@ -1,0 +1,6 @@
+host: 127.0.0.1
+port: 8000
+data_dir: artifacts/serving/aloha_smoke
+model_id: facebook/vjepa2-vith-fpc64-256
+device: cpu
+max_concurrent_queries: 1

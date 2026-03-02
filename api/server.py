@@ -146,7 +146,7 @@ def create_app(
         )
         return TransitionSearchResponse(root=results)
 
-    @app.get("/episodes/{episode_id}", response_model=EpisodeDetailsResponse)
+    @app.get("/episodes/{episode_id:path}", response_model=EpisodeDetailsResponse)
     async def get_episode_details(
         request: Request,
         episode_id: str,

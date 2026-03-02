@@ -1,0 +1,8 @@
+raw_dir: artifacts/extraction/gpu/aloha_smoke
+output_dir: artifacts/serving/aloha_smoke
+checkpoint_db: state/compression_aloha_smoke.sqlite3
+sample_size: 16384
+pca_dim: 128
+n_centroids: 128
+n_bits: 2
+random_seed: 0

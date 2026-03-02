@@ -78,3 +78,15 @@ def test_episode_endpoint_returns_404_for_unknown_episode() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Unknown episode_id: missing"
+
+
+def test_episode_endpoint_accepts_ids_with_slashes() -> None:
+    service = RetrievalService(FakeEngine(), max_concurrent_queries=2)
+    client = TestClient(create_app(service=service))
+
+    response = client.get("/episodes/lerobot/aloha_sim_insertion_scripted_image_0")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["episode_id"] == "lerobot/aloha_sim_insertion_scripted_image_0"
+    assert payload["dataset_name"] == "droid"
