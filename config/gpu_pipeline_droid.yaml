@@ -24,6 +24,7 @@ index:
 serving:
   host: 127.0.0.1
   port: 8000
+  model_id: facebook/vjepa2-vitl-fpc64-256
   device: cuda
   max_concurrent_queries: 4
 
