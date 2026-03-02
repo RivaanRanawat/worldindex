@@ -135,12 +135,22 @@ def sample_training_tokens(
     return np.ascontiguousarray(np.concatenate(sample_parts, axis=0).astype(np.float32, copy=False))
 
 
-def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
+def run_compression_pipeline(
+    config: CompressionPipelineConfig,
+    checkpoint: str | None = None,
+    build_index: bool = True,
+) -> Path:
     logger = structlog.get_logger(__name__).bind(component="compression_pipeline")
     config.output_dir.mkdir(parents=True, exist_ok=True)
     config.shard_dir.mkdir(parents=True, exist_ok=True)
     config.shard_metadata_dir.mkdir(parents=True, exist_ok=True)
     _initialize_checkpoint_db(config.checkpoint_db)
+
+    if checkpoint is not None:
+        resume_shard_id = int(checkpoint)
+        persisted_shard_id = int(_read_checkpoint(config.checkpoint_db, _LAST_COMPLETED_SHARD_KEY, "-1"))
+        if resume_shard_id > persisted_shard_id:
+            _write_checkpoint(config.checkpoint_db, _LAST_COMPLETED_SHARD_KEY, str(resume_shard_id))
 
     raw_batches = discover_raw_batches(config.raw_dir)
     if not raw_batches:
@@ -197,21 +207,22 @@ def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
 
     _consolidate_metadata(config)
 
-    indexed_shard_id = int(_read_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, "-1"))
     final_shard_id = len(raw_batches) - 1
-    if indexed_shard_id < final_shard_id or not config.faiss_index_path.exists():
-        index_builder = IndexBuilder()
-        coarse_vectors = index_builder.build_faiss_index(config.shard_dir, config.faiss_index_path)
-        index_builder.validate_index(config.faiss_index_path, coarse_vectors)
-        _write_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, str(final_shard_id))
+    if build_index:
+        indexed_shard_id = int(_read_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, "-1"))
+        if indexed_shard_id < final_shard_id or not config.faiss_index_path.exists():
+            index_builder = IndexBuilder()
+            coarse_vectors = index_builder.build_faiss_index(config.shard_dir, config.faiss_index_path)
+            index_builder.validate_index(config.faiss_index_path, coarse_vectors)
+            _write_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, str(final_shard_id))
 
     logger.info(
         "compression_pipeline_complete",
         shard_count=len(raw_batches),
         metadata_path=str(config.consolidated_metadata_path),
-        index_path=str(config.faiss_index_path),
+        index_path=str(config.faiss_index_path) if build_index else None,
     )
-    return config.faiss_index_path
+    return config.faiss_index_path if build_index else config.consolidated_metadata_path
 
 
 def main(argv: list[str] | None = None) -> None:

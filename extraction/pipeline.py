@@ -218,12 +218,20 @@ def writer_fn(
     logger.info("writer_complete")
 
 
-def run_extraction(config: ExtractionConfig) -> int:
+def run_extraction(
+    config: ExtractionConfig,
+    checkpoint: int | None = None,
+) -> int:
     logger = structlog.get_logger(__name__).bind(component="single_node_extraction")
     config.output_dir.mkdir(parents=True, exist_ok=True)
     _initialize_checkpoint_db(config.checkpoint_db)
 
-    resume_from = _read_checkpoint(config.checkpoint_db) + 1
+    persisted_checkpoint = _read_checkpoint(config.checkpoint_db)
+    if checkpoint is not None and checkpoint > persisted_checkpoint:
+        _write_checkpoint(config.checkpoint_db, checkpoint)
+        persisted_checkpoint = checkpoint
+
+    resume_from = persisted_checkpoint + 1
     context = _select_context(config.start_method)
     q1 = context.Queue(maxsize=config.queue_depth)
     q2 = context.Queue(maxsize=config.queue_depth)

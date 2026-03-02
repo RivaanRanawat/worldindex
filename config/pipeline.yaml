@@ -1,0 +1,29 @@
+datasets:
+  - datasets/droid.yaml
+
+extraction:
+  model_id: facebook/vjepa2-vith-fpc64-256
+  device: cpu
+  batch_size: 1
+  queue_depth: 8
+  flush_size: 25
+
+compression:
+  sample_size: 500000
+  pca_dim: 128
+  n_centroids: 32768
+  n_bits: 2
+  random_seed: 0
+
+index:
+  hnsw_m: 32
+  ef_construction: 200
+  ef_search: 128
+
+serving:
+  host: 127.0.0.1
+  port: 8000
+  device: cpu
+
+output_dir: ../artifacts/worldindex
+pipeline_db: ../artifacts/worldindex/checkpoints/pipeline.sqlite3

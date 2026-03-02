@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-import faiss
 import numpy as np
 import structlog
-from sklearn.cluster import MiniBatchKMeans
-from sklearn.decomposition import PCA
 
 from compression.models import CompressedClip
 
@@ -45,10 +43,12 @@ class TokenCompressor:
         self.quantile_thresholds: np.ndarray | None = None
         self.quantization_levels: np.ndarray | None = None
         self.explained_variance_ratio: np.ndarray | None = None
-        self._centroid_index: faiss.IndexFlatL2 | None = None
+        self._centroid_index: Any | None = None
         self._logger = structlog.get_logger(__name__).bind(component="token_compressor")
 
     def train(self, sample_tokens: np.ndarray) -> None:
+        from sklearn.cluster import MiniBatchKMeans
+
         training_tokens = np.asarray(sample_tokens, dtype=np.float32)
         if training_tokens.ndim != 2:
             raise ValueError("sample_tokens must be a 2D array")
@@ -182,7 +182,9 @@ class TokenCompressor:
         )
         return compressor
 
-    def _fit_pca(self, training_tokens: np.ndarray, n_components: int) -> PCA:
+    def _fit_pca(self, training_tokens: np.ndarray, n_components: int) -> Any:
+        from sklearn.decomposition import PCA
+
         pca = PCA(
             n_components=n_components,
             svd_solver="randomized",
@@ -242,7 +244,9 @@ class TokenCompressor:
             return float((thresholds[1] + thresholds[2]) / 2.0)
         return float(thresholds[2])
 
-    def _get_centroid_index(self) -> faiss.IndexFlatL2:
+    def _get_centroid_index(self) -> Any:
+        import faiss
+
         if self._centroid_index is None:
             centroid_index = faiss.IndexFlatL2(self.pca_dim)
             centroid_index.add(self._require_centroids())

@@ -2,11 +2,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import faiss
 import numpy as np
 import structlog
+from pydantic import BaseModel, ConfigDict, Field
 
 from compression.shards import iter_shard_paths, read_coarse_vectors_from_shard
+
+
+class IndexConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    compressed_dir: Path
+    output_path: Path
+    hnsw_m: int = Field(default=32, gt=0)
+    ef_construction: int = Field(default=200, gt=0)
+    ef_search: int = Field(default=128, gt=0)
 
 
 class IndexBuilder:
@@ -22,6 +32,8 @@ class IndexBuilder:
         self._logger = structlog.get_logger(__name__).bind(component="index_builder")
 
     def build_faiss_index(self, compressed_dir: Path, output_path: Path) -> np.ndarray:
+        import faiss
+
         shard_paths = iter_shard_paths(compressed_dir)
         if not shard_paths:
             raise FileNotFoundError(f"No compressed shards found in {compressed_dir}")
@@ -50,6 +62,8 @@ class IndexBuilder:
         return coarse_vectors
 
     def validate_index(self, index_path: Path, coarse_vectors: np.ndarray) -> float:
+        import faiss
+
         vectors = self._normalize_rows(np.asarray(coarse_vectors, dtype=np.float32))
         if vectors.ndim != 2:
             raise ValueError("coarse_vectors must be a 2D float32 array")
@@ -98,3 +112,17 @@ class IndexBuilder:
         row_norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         safe_norms = np.where(row_norms == 0.0, 1.0, row_norms)
         return np.ascontiguousarray(vectors / safe_norms, dtype=np.float32)
+
+
+def run_index_build(
+    config: IndexConfig,
+    checkpoint: str | None = None,
+) -> Path:
+    del checkpoint
+    builder = IndexBuilder(
+        hnsw_m=config.hnsw_m,
+        ef_construction=config.ef_construction,
+        ef_search=config.ef_search,
+    )
+    builder.build_faiss_index(config.compressed_dir, config.output_path)
+    return config.output_path

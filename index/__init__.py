@@ -1,3 +1,3 @@
-from index.builder import IndexBuilder
+from index.builder import IndexBuilder, IndexConfig, run_index_build
 
-__all__ = ["IndexBuilder"]
+__all__ = ["IndexBuilder", "IndexConfig", "run_index_build"]

@@ -12,9 +12,12 @@ from compression.shards import (
 )
 from compression.token_compressor import TokenCompressor
 
+CompressionConfig = CompressionPipelineConfig
+
 __all__ = [
     "SHARD_MAGIC",
     "SHARD_SUFFIX",
+    "CompressionConfig",
     "CompressedClip",
     "CompressionPipelineConfig",
     "ShardHeader",
