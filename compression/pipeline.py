@@ -13,10 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from compression.shards import write_compressed_shard
 from compression.token_compressor import TokenCompressor
+from index import IndexBuilder
 
 _CHECKPOINT_ROW_KEY_PREFIX = "compression:"
 _TRAINING_COMPLETE_KEY = "training_complete"
 _LAST_COMPLETED_SHARD_KEY = "last_completed_shard_id"
+_INDEXED_SHARD_KEY = "indexed_shard_id"
 
 
 class CompressionPipelineConfig(BaseModel):
@@ -46,6 +48,10 @@ class CompressionPipelineConfig(BaseModel):
     @property
     def consolidated_metadata_path(self) -> Path:
         return self.output_dir / "clips.parquet"
+
+    @property
+    def faiss_index_path(self) -> Path:
+        return self.output_dir / "coarse_hnsw.faiss"
 
     @classmethod
     def from_yaml(cls, config_path: Path) -> CompressionPipelineConfig:
@@ -191,12 +197,21 @@ def run_compression_pipeline(config: CompressionPipelineConfig) -> Path:
 
     _consolidate_metadata(config)
 
+    indexed_shard_id = int(_read_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, "-1"))
+    final_shard_id = len(raw_batches) - 1
+    if indexed_shard_id < final_shard_id or not config.faiss_index_path.exists():
+        index_builder = IndexBuilder()
+        coarse_vectors = index_builder.build_faiss_index(config.shard_dir, config.faiss_index_path)
+        index_builder.validate_index(config.faiss_index_path, coarse_vectors)
+        _write_checkpoint(config.checkpoint_db, _INDEXED_SHARD_KEY, str(final_shard_id))
+
     logger.info(
         "compression_pipeline_complete",
         shard_count=len(raw_batches),
         metadata_path=str(config.consolidated_metadata_path),
+        index_path=str(config.faiss_index_path),
     )
-    return config.consolidated_metadata_path
+    return config.faiss_index_path
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -205,8 +220,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Usage: poetry run python scripts/compress.py <config.yaml>")
 
     config = CompressionPipelineConfig.from_yaml(Path(args[0]))
-    metadata_path = run_compression_pipeline(config)
-    print({"metadata_path": str(metadata_path)})
+    index_path = run_compression_pipeline(config)
+    print({"index_path": str(index_path), "metadata_path": str(config.consolidated_metadata_path)})
 
 
 def _consolidate_metadata(config: CompressionPipelineConfig) -> None:

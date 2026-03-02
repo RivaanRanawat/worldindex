@@ -64,11 +64,12 @@ def test_run_compression_pipeline_reuses_existing_outputs_on_rerun(
         random_seed=0,
     )
 
-    metadata_path = run_compression_pipeline(config)
+    index_path = run_compression_pipeline(config)
 
-    assert metadata_path == config.consolidated_metadata_path
+    assert index_path == config.faiss_index_path
     assert config.compressor_dir.exists()
     assert config.checkpoint_db.exists()
+    assert config.faiss_index_path.exists()
 
     shard_paths = sorted(config.shard_dir.glob("*.widx"))
     assert [path.name for path in shard_paths] == ["shard_00000000.widx", "shard_00000001.widx"]
@@ -85,6 +86,7 @@ def test_run_compression_pipeline_reuses_existing_outputs_on_rerun(
     assert checkpoint_rows == {
         "compression:training_complete": "1",
         "compression:last_completed_shard_id": "1",
+        "compression:indexed_shard_id": "1",
     }
 
     recovered_clip = read_clip_from_shard(shard_paths[1], 0)
@@ -96,10 +98,10 @@ def test_run_compression_pipeline_reuses_existing_outputs_on_rerun(
         raise AssertionError("completed shards should not be rewritten on rerun")
 
     monkeypatch.setattr("compression.pipeline.write_compressed_shard", fail_if_called)
-    second_metadata_path = run_compression_pipeline(config)
+    second_index_path = run_compression_pipeline(config)
 
     consolidated = pl.read_parquet(config.consolidated_metadata_path)
-    assert second_metadata_path == config.consolidated_metadata_path
+    assert second_index_path == config.faiss_index_path
     assert consolidated["clip_index"].to_list() == [0, 1, 2]
     assert consolidated["shard_id"].to_list() == [0, 0, 1]
     assert consolidated["shard_offset"].to_list() == [0, 1, 0]
