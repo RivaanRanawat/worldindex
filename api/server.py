@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Awaitable, Callable, TypeVar
@@ -44,7 +43,7 @@ def create_app(
             if service is not None:
                 app.state.service = service
             elif config is not None:
-                app.state.service = await asyncio.to_thread(build_service, config)
+                app.state.service = build_service(config)
             else:
                 raise RuntimeError("Unable to initialize retrieval service")
         yield
@@ -194,4 +193,6 @@ async def _handle_errors(operation: Awaitable[T]) -> T:
                 status_code=503,
                 detail="Model ran out of memory while serving the request",
             ) from exc
+        if "segmentation fault" in str(exc).lower() or "disabled on macos with python 3.12" in str(exc).lower():
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise

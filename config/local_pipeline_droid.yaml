@@ -1,0 +1,31 @@
+datasets:
+  - ./datasets/droid.yaml
+
+extraction:
+  model_id: facebook/vjepa2-vith-fpc64-256
+  device: cpu
+  batch_size: 1
+  queue_depth: 4
+  flush_size: 2
+  clip_former_factory: tests.extraction.spawn_fakes:build_limited_real_clip_former
+
+compression:
+  sample_size: 16384
+  pca_dim: 128
+  n_centroids: 128
+  n_bits: 2
+  random_seed: 0
+
+index:
+  hnsw_m: 16
+  ef_construction: 64
+  ef_search: 64
+
+serving:
+  host: 127.0.0.1
+  port: 8000
+  device: cpu
+  max_concurrent_queries: 1
+
+output_dir: ../artifacts/worldindex_smoke
+pipeline_db: ../artifacts/worldindex_smoke/checkpoints/pipeline.sqlite3

@@ -347,7 +347,7 @@ def _load_encoder_model(
     from transformers import AutoModel
 
     dtype = torch.float16 if not device.startswith("cpu") else torch.float32
-    model = AutoModel.from_pretrained(model_id, torch_dtype=dtype)
+    model = AutoModel.from_pretrained(model_id, dtype=dtype)
     model.to(device)
     model.eval()
     return model
